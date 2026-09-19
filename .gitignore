@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 测试/工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 环境变量与密钥（切勿提交 API Key）
+.env
+.env.*
+*.key
+
+# 编辑器/系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
