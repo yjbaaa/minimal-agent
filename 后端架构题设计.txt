@@ -1,0 +1,8 @@
+1.Kv cache跟context要如何组合设计，来保证agent效果和耗时都达到一个综合的最优状态？
+我不会单独优化 KV Cache，而是把它和 Context Engineering 放在一起设计。首先把 Context 按稳定性拆成 Stable Context 和 Dynamic Context，System Prompt、Agent Rules、Tool Schema、稳定业务知识尽量固定并放在 Prefix 前部，让 Prefix Cache 最大化复用；用户问题、RAG 结果、Tool Result 和最近对话放在后部，避免动态内容导致整个 Prefix 频繁失效。
+同时 Context Manager 不会把所有历史和 Tool Result 原样塞给模型，而是通过结构化 Memory、Conversation Summary、RAG Rerank、Tool Result Compression 控制 Token Budget。
+最后通过 Cache Hit Rate、TTFT、总延迟、Input Token、成本以及 Agent 任务成功率做联合评测，而不是单纯追求最大 Cache 命中率。我的目标是找到质量基本不下降情况下，Token、TTFT 和成本的 Pareto 最优点。
+2.传统后端的数据存储都是放在后端。但agent时代，大部分业务逻辑放到agent，后端的角色发生了变化，数据很容易变成agent存一份，后端存一份要如何设计？
+Agent 可以接管一部分传统应用层的决策和编排，但后端仍然应该作为业务事实和业务约束的最终执行边界。
+Agent 负责理解意图、规划和选择 Tool；后端负责权限、业务规则、事务和数据一致性。
+Agent Memory 只保存对话、偏好、摘要等认知状态。对于写操作通过 Command Tool 进入后端，并使用事务、Outbox 和幂等键保证可靠性。这样既可以把业务决策交给 Agent，又不会因为 Agent 自己维护一份业务状态而破坏数据一致性。

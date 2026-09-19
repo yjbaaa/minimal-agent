@@ -1,0 +1,28 @@
+模块一：
+1.大模型面对第一轮长窗口或多模态输入时，first token 会显著变慢。有什么快速/低成本/用户体验也不差的方案？从5-10秒稳定压缩到2秒。
+我会先把 TTFT 拆成 Gateway、RAG、多模态、Prefill 和排队几个阶段，再针对性优化。核心采用 Context Compression + Prefix/KV Cache + 异步多模态 + Fast/Deep RAG。
+稳定内容做 Prefix Cache，历史和 RAG 做压缩与动态 Top-K，多模态采用 Fast Vision 先响应、Deep Vision 后补充，并对重复图片做 Semantic Cache。最后通过 TTFT、Cache Hit、Token、RAG/视觉耗时和 Agent 成功率综合评估，目标是在保证效果的前提下，把首字从 5~10 秒压到 2 秒左右。
+
+模块二：
+1.和聊天 Agent 熟悉半个月后，用户问了一个以前问过的问题。Agent 如何做 memory 召回更合理？
+我会先判断用户当前问题是不是可能和历史记忆有关，然后采用“语义召回 + 时间 + 重要性 + 当前上下文”做综合排序。
+比如用户问：“上次你推荐我的那个方案是什么？”
+我会先用当前 Query 做向量召回，找到历史相关对话，再结合时间衰减、Memory 重要性、与当前问题的相关度进行 Rerank。
+如果召回结果足够确定，就把相关 Memory 注入 Context；如果置信度低，就继续检索或者直接询问用户，而不是让 Agent 猜。
+
+模块三
+2.用户给 Agent 下达任务：每天早上 9 点根据昨天聊天情况做复盘总结。你会怎么设计？
+对于长程任务，大模型执行一段时间可能会忘掉目标，你知道哪些解决方案，有什么优缺？
+我会把它设计成一个持久化定时任务。用户说“每天早上 9 点复盘”，Agent 先把自然语言解析成 cron + timezone + 任务内容，然后存到任务数据库。
+到 9 点由 Scheduler 触发任务，拉取昨天的聊天记录，经过摘要/压缩后交给 LLM 生成复盘，最后通过消息通知用户。
+核心就是：用户指令 → 定时任务 → Scheduler → 获取历史 → LLM 总结 → 通知用户
+同时给每次执行生成 run_id，做幂等、失败重试和执行记录
+
+模块四
+1.Agent 工具有同步和异步两类。异步工具不能让用户一直等，但结果依然重要。你会如何设计异步工具执行和完成通知？
+异步工具我会采用“任务 ID + 后台 Worker + 完成事件”的方式，调用时立即返回 task_id，工具后台执行，完成后通过事件通知 Runtime，再由 Agent 根据结果继续执行或主动通知用户。
+
+模块五
+1.Claude Code 的工具输出方式和国内 GLM / 豆包等 OpenAI-compatible function calling 有什么不同？他们各自这样设计的优缺点是什么？
+Claude 更偏复杂的消息块，OpenAI-compatible 更偏标准函数调用。Claude 的优势是灵活，缺点是复杂；OpenAI-compatible 的优势是简单统一，缺点是复杂场景下扩展性相对弱。
+我的 Runtime 会统一抽象成 ToolCall → ToolExecute → ToolResult，这样底层换模型也不会影响 Agent。
